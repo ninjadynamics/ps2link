@@ -40,6 +40,11 @@ char elfName[MAXNAMLEN] __attribute__((aligned(16)));
 char if_conf[IPCONF_MAX_LEN] __attribute__((section(".data"))) = "";
 int if_conf_len __attribute__((section(".data"))) = 0;
 
+// Incremented on every start and kept across ps2link's own restarts like the
+// cached config. The IOP reports it so a host can prove a reset completed.
+unsigned int boot_generation __attribute__((section(".data"))) = 0;
+static char generation_arg[16];
+
 ////////////////////////////////////////////////////////////////////////
 
 static void printIpConfig(void)
@@ -174,7 +179,8 @@ static void loadModules(void)
     SifExecModuleBuffer(ioptrap_irx, size_ioptrap_irx, 0, NULL, &ret);
     dbgscr_printf("[%d] returned\n", ret);
     dbgscr_printf("Exec ps2link module. (%x,%d) ", (unsigned int)ps2link_irx, size_ps2link_irx);
-    SifExecModuleBuffer(ps2link_irx, size_ps2link_irx, 0, NULL, &ret);
+    sprintf(generation_arg, "gen=%x", boot_generation);
+    SifExecModuleBuffer(ps2link_irx, size_ps2link_irx, strlen(generation_arg) + 1, generation_arg, &ret);
     dbgscr_printf("[%d] returned\n", ret);
     dbgscr_printf("All modules loaded on IOP.\n");
 }
@@ -182,7 +188,7 @@ static void loadModules(void)
 static void printWelcomeInfo()
 {
     scr_printf("\n\n\n\n");
-    scr_printf("Welcome to ps2link %s\n", APP_VERSION);
+    scr_printf("Welcome to ps2link %s - P%d (gen %x)\n", APP_VERSION, PKO_HS_MARKER, boot_generation);
     scr_printf("ps2link loaded at 0x%08X-0x%08X, size: 0x%08X\n", (unsigned int)&__start, (unsigned int)&_end, (unsigned int)&_end - (unsigned int)&__start);
     scr_printf("Initializing...\n");
 }
@@ -218,6 +224,7 @@ int main(int argc, char *argv[])
     SifInitRpc(0);
     init_scr();
 
+    boot_generation++;
     printWelcomeInfo();
     if (if_conf_len == 0) {
         scr_printf("Initial boot, will load config then reset\n");

@@ -14,9 +14,12 @@
 #include <intrman.h>
 #include <loadcore.h>
 
+#include "hostlink.h"
+#include "cmdHandler.h"
+
 ////////////////////////////////////////////////////////////////////////
 #define NPM_PUTS     0x01
-#define RPC_NPM_USER 0x014d704e
+#define RPC_NPM_USER PKO_NPM_RPC_ID
 
 ////////////////////////////////////////////////////////////////////////
 static void *
@@ -26,6 +29,12 @@ naplinkRpcHandler(int cmd, void *buffer, int size)
     switch (cmd) {
         case NPM_PUTS:
             printf(buffer);
+            break;
+        case PKO_NPM_EE_READY:
+            cmdHandlerEeReady();
+            break;
+        case PKO_NPM_EXEC_RESULT:
+            cmdHandlerExecResult(((unsigned int *)buffer)[0], ((int *)buffer)[1]);
             break;
         default:
             printf("unknown npm rpc call\n");

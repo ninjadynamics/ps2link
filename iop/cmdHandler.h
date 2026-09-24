@@ -14,5 +14,8 @@ extern int excepscrdump;
 
 unsigned int pkoSendSifCmd(unsigned int cmd, void *src, unsigned int len);
 int cmdHandlerInit(void);
+void cmdHandlerSetGeneration(unsigned int generation);
+void cmdHandlerEeReady(void);
+void cmdHandlerExecResult(unsigned int id, int status);
 
 #endif /* CMD_HANDLER_H */

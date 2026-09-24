@@ -49,6 +49,45 @@
 #define PKO_WRITE_MEM    0xbabe020c
 #define PKO_IOPEXCEP_CMD 0xbabe020d
 
+/* HyperSolar fork (ninjadynamics/ps2link): acknowledged control commands.
+ * Stock commands keep their behavior; a stock ps2client never sends these.
+ * VERSION reports the fork marker, a boot generation that changes on every
+ * ps2link start, and whether the EE command handler can accept commands.
+ * RESET2 resets only the generation it names, so a retransmission cannot
+ * reset the successor. EXECEE2 carries a host request ID; the IOP forwards
+ * each ID to the EE once, and repeats the EE's result for retransmissions.
+ * Bump PKO_HS_MARKER (shown as P<n> on the welcome screen) on every change
+ * to the target side. */
+#define PKO_VERSION_CMD  0xbabe0210
+#define PKO_VERSION_RLY  0xbabe0211
+#define PKO_EXECEE2_CMD  0xbabe0212
+#define PKO_EXECEE2_RLY  0xbabe0213
+#define PKO_RESET2_CMD   0xbabe0214
+#define PKO_RESET2_RLY   0xbabe0215
+
+#define PKO_HS_PROTOCOL        1
+#define PKO_HS_MARKER          1
+#define PKO_HS_FEATURE_EXECEE2 0x00000001
+#define PKO_HS_FEATURE_RESET2  0x00000002
+#define PKO_HS_FEATURE_TLM_PUSH 0x00000004
+
+/* Binary telemetry: library "pkotlm" v1.1 export 4, pkoTlmPush(data, size),
+ * sends one frame per UDP datagram to the fileio PC on this port (0x4713 is
+ * ps2netfs). The frame format belongs to the producer and the host decoder. */
+#define PKO_TLM_PORT      0x4714
+#define PKO_TLM_FRAME_MAX 1440
+
+/* EE -> IOP notifications on the existing naplink RPC server. EXEC_RESULT
+ * carries two native 32-bit words: request ID, then PKO_EXEC_* status. */
+#define PKO_NPM_RPC_ID      0x014d704e
+#define PKO_NPM_EE_READY    0x02
+#define PKO_NPM_EXEC_RESULT 0x03
+
+#define PKO_EXEC_STARTED      0
+#define PKO_EXEC_BUSY         1
+#define PKO_EXEC_LOAD_FAILED  2
+#define PKO_EXEC_START_FAILED 3
+
 #define PKO_RPC_RESET    1
 #define PKO_RPC_EXECEE   2
 #define PKO_RPC_DUMMY    3
@@ -281,6 +320,49 @@ typedef struct
     unsigned short len;
     unsigned int regs[79];
 } __attribute__((packed)) pko_pkt_send_regs;
+
+typedef struct
+{
+    unsigned int cmd;
+    unsigned short len;
+    unsigned int protocol;
+    unsigned int marker;
+    unsigned int features;
+    unsigned int generation;
+    unsigned int ee_ready;
+} __attribute__((packed)) pko_pkt_version_rly;
+
+typedef struct
+{
+    unsigned int cmd;
+    unsigned short len;
+    unsigned int id;
+    int argc;
+    char argv[PKO_MAX_PATH];
+} __attribute__((packed)) pko_pkt_execee2_req;
+
+typedef struct
+{
+    unsigned int cmd;
+    unsigned short len;
+    unsigned int id;
+    int status;
+} __attribute__((packed)) pko_pkt_execee2_rly;
+
+typedef struct
+{
+    unsigned int cmd;
+    unsigned short len;
+    unsigned int generation;
+} __attribute__((packed)) pko_pkt_reset2_req;
+
+typedef struct
+{
+    unsigned int cmd;
+    unsigned short len;
+    unsigned int generation;
+    unsigned int accepted;
+} __attribute__((packed)) pko_pkt_reset2_rly;
 
 #define PKO_MAX_WRITE_SEGMENT (1460 - sizeof(pko_pkt_write_req))
 #define PKO_MAX_READ_SEGMENT  (1460 - sizeof(pko_pkt_read_rly))

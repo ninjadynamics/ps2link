@@ -7,7 +7,7 @@
 #.SUFFIXES: .S .c .o .s .elf .irx
 
 IOP_BIN  = ps2link.irx
-IOP_OBJS = net_fsys.o net_fio.o ps2link.o cmdHandler.o nprintf.o excepHandler.o imports.o
+IOP_OBJS = exports.o net_fsys.o net_fio.o ps2link.o cmdHandler.o nprintf.o excepHandler.o tlmPush.o imports.o
 
 IOP_INCS += -I../include
 IOP_LIBS +=

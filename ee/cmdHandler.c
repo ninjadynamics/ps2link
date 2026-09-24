@@ -57,6 +57,24 @@ int sif0HandlerId = 0;
 unsigned int *sifDmaDataPtr = (unsigned int *)(0x20100000 - 2048);
 int excepscrdump = 1;
 
+// Fork notifications to the IOP ps2link module (see hostlink.h).
+static SifRpcClientData_t npmClient __attribute__((aligned(64)));
+static unsigned int npmData[16] __attribute__((aligned(64)));
+
+static void pkoNotifyIop(int fn, unsigned int word0, unsigned int word1)
+{
+    npmData[0] = word0;
+    npmData[1] = word1;
+    SifCallRpc(&npmClient, fn, 0, npmData, sizeof(npmData), NULL, 0, NULL, NULL);
+}
+
+static void pkoExecResult(unsigned int reply_id, int status)
+{
+    if (reply_id != 0) {
+        pkoNotifyIop(PKO_NPM_EXEC_RESULT, reply_id, (unsigned int)status);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////
 // Create the argument struct to send to the user thread
@@ -140,25 +158,30 @@ pkoLoadElf(char *path)
 
 ////////////////////////////////////////////////////////////////////////
 // Load and start the requested elf
+// A nonzero reply_id reports the decision to the IOP for an EXECEE2 host.
+// "Started" is reported before StartThread: the new thread may preempt this
+// one indefinitely, and a start failure is reported as a later result.
 static int
-pkoExecEE(pko_pkt_execee_req *cmd)
+pkoExecArgs(int argc, char *argv, unsigned int reply_id)
 {
     char path[PKO_MAX_PATH];
     int ret;
     int pid;
 
     if (userThreadID) {
+        pkoExecResult(reply_id, PKO_EXEC_BUSY);
         return -1;
     }
 
-    dbgprintf("EE: Executing file %s...\n", cmd->argv);
-    memcpy(path, cmd->argv, PKO_MAX_PATH);
+    dbgprintf("EE: Executing file %s...\n", argv);
+    memcpy(path, argv, PKO_MAX_PATH);
 
     scr_printf("Executing file %s...\n", path);
 
     pid = pkoLoadElf(path);
     if (pid < 0) {
         scr_printf("Could not execute file %s\n", path);
+        pkoExecResult(reply_id, PKO_EXEC_LOAD_FAILED);
         return -1;
     }
 
@@ -167,19 +190,33 @@ pkoExecEE(pko_pkt_execee_req *cmd)
 
     userThreadID = pid;
 
-    makeArgs(ntohl(cmd->argc), path, &userArgs);
+    makeArgs(argc, path, &userArgs);
 
     // Hack away..
     userArgs.pid = (int)&userThreadID;
 
+    pkoExecResult(reply_id, PKO_EXEC_STARTED);
     ret = StartThread(userThreadID, &userArgs);
     if (ret < 0) {
         printf("EE: Start user thread failed %d\n", ret);
-        cmdThreadID = 0;
         DeleteThread(userThreadID);
+        userThreadID = 0;
+        pkoExecResult(reply_id, PKO_EXEC_START_FAILED);
         return -1;
     }
     return ret;
+}
+
+static int
+pkoExecEE(pko_pkt_execee_req *cmd)
+{
+    return pkoExecArgs(ntohl(cmd->argc), cmd->argv, 0);
+}
+
+static int
+pkoExecEE2(pko_pkt_execee2_req *cmd)
+{
+    return pkoExecArgs(ntohl(cmd->argc), cmd->argv, ntohl(cmd->id));
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -732,6 +769,10 @@ static int cmdThread(void *arg)
                 dbgprintf("EE: Rpc EXECEE called\n");
                 ret = pkoExecEE(pkt);
                 break;
+            case PKO_EXECEE2_CMD:
+                dbgprintf("EE: Rpc EXECEE2 called\n");
+                ret = pkoExecEE2(pkt);
+                break;
             case PKO_START_VU:
                 dbgprintf("EE: Start VU\n");
                 ret = pkoStartVU(pkt);
@@ -811,6 +852,14 @@ int initCmdRpc(void)
 
     sif0HandlerId = AddDmacHandler(DMAC_SIF0, &pkoCmdIntrHandler, 0);
     EnableDmac(DMAC_SIF0);
+
+    // The IOP module registered its RPC server before this runs (it is loaded
+    // first). From here a forwarded command reaches this handler, so tell the
+    // IOP it may forward acknowledged commands.
+    while (SifBindRpc(&npmClient, PKO_NPM_RPC_ID, 0) < 0 || npmClient.server == NULL) {
+        nopdelay();
+    }
+    pkoNotifyIop(PKO_NPM_EE_READY, 0, 0);
     return 0;
 }
 

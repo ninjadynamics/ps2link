@@ -30,6 +30,15 @@ static unsigned int rpc_data[1024 / 4] __attribute__((aligned(16)));
 
 int excepscrdump = 1;
 
+// Fork state. The EE passes the generation at module load; ee_ready and the
+// EXECEE2 result are published by the EE through the naplink RPC thread and
+// read by the command listener, which alone owns the UDP socket.
+static unsigned int boot_generation = 0;
+static volatile int ee_ready = 0;
+static unsigned int exec_forward_id = 0;
+static volatile unsigned int exec_result_id = 0;
+static volatile int exec_result_status = 0;
+
 #define PKO_DMA_DEST ((void *)0x200ff800)
 //unsigned int *dma_ptr =(unsigned int*)(0x20100000-2048);
 
@@ -235,6 +244,108 @@ pkoWriteMem(char *buf, int len)
 };
 
 //////////////////////////////////////////////////////////////////////////
+void
+cmdHandlerSetGeneration(unsigned int generation)
+{
+    boot_generation = generation;
+}
+
+// Called from the naplink RPC thread once the EE command handler is live.
+// Until then a forwarded command could be cleared by its initialization.
+void
+cmdHandlerEeReady(void)
+{
+    ee_ready = 1;
+}
+
+// Called from the naplink RPC thread with the EE's EXECEE2 decision.
+// The status is published before the ID that makes it visible.
+void
+cmdHandlerExecResult(unsigned int id, int status)
+{
+    exec_result_status = status;
+    exec_result_id = id;
+}
+
+static void
+pkoVersion(int sock, struct sockaddr_in *remote_addr)
+{
+    pko_pkt_version_rly reply;
+
+    reply.cmd = htonl(PKO_VERSION_RLY);
+    reply.len = htons(sizeof(reply));
+    reply.protocol = htonl(PKO_HS_PROTOCOL);
+    reply.marker = htonl(PKO_HS_MARKER);
+    reply.features = htonl(PKO_HS_FEATURE_EXECEE2 | PKO_HS_FEATURE_RESET2 | PKO_HS_FEATURE_TLM_PUSH);
+    reply.generation = htonl(boot_generation);
+    reply.ee_ready = htonl(ee_ready);
+    sendto(sock, &reply, sizeof(reply), 0, (struct sockaddr *)remote_addr, sizeof(*remote_addr));
+}
+
+static void
+pkoExecEE2(int sock, struct sockaddr_in *remote_addr, char *buf, int len)
+{
+    pko_pkt_execee2_req *cmd = (pko_pkt_execee2_req *)buf;
+    pko_pkt_execee2_rly reply;
+    unsigned int id;
+
+    if (len != sizeof(pko_pkt_execee2_req) || !ee_ready) {
+        return;
+    }
+
+    id = ntohl(cmd->id);
+    if (id == 0) {
+        return;
+    }
+
+    // A retransmission of a decided request gets the EE's answer again.
+    if (id == exec_result_id) {
+        reply.cmd = htonl(PKO_EXECEE2_RLY);
+        reply.len = htons(sizeof(reply));
+        reply.id = htonl(id);
+        reply.status = htonl(exec_result_status);
+        sendto(sock, &reply, sizeof(reply), 0, (struct sockaddr *)remote_addr, sizeof(*remote_addr));
+        return;
+    }
+
+    // One forward per ID: the EE executes a request at most once.
+    if (id == exec_forward_id) {
+        return;
+    }
+    exec_forward_id = id;
+    cmd->argv[PKO_MAX_PATH - 1] = '\0';
+    pkoSendSifCmd(PKO_RPC_EXECEE, buf, len);
+}
+
+static void
+pkoReset2(int sock, struct sockaddr_in *remote_addr, char *buf, int len)
+{
+    pko_pkt_reset2_req *cmd = (pko_pkt_reset2_req *)buf;
+    pko_pkt_reset2_rly reply;
+    pko_pkt_reset_req reset;
+    int accepted;
+
+    if (len != sizeof(pko_pkt_reset2_req)) {
+        return;
+    }
+
+    // Only the named generation resets; a late retransmission reaching the
+    // successor reports that successor's generation instead.
+    accepted = ntohl(cmd->generation) == boot_generation;
+    reply.cmd = htonl(PKO_RESET2_RLY);
+    reply.len = htons(sizeof(reply));
+    reply.generation = htonl(boot_generation);
+    reply.accepted = htonl(accepted);
+    sendto(sock, &reply, sizeof(reply), 0, (struct sockaddr *)remote_addr, sizeof(*remote_addr));
+
+    if (accepted) {
+        reset.cmd = htonl(PKO_RESET_CMD);
+        reset.len = htons(sizeof(reset));
+        pkoReset((char *)&reset, sizeof(reset));
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////
 static void
 cmdListener(int sock)
 {
@@ -300,6 +411,15 @@ cmdListener(int sock)
                 break;
             case PKO_WRITE_MEM:
                 pkoWriteMem(recvbuf, len);
+                break;
+            case PKO_VERSION_CMD:
+                pkoVersion(sock, &remote_addr);
+                break;
+            case PKO_EXECEE2_CMD:
+                pkoExecEE2(sock, &remote_addr, recvbuf, len);
+                break;
+            case PKO_RESET2_CMD:
+                pkoReset2(sock, &remote_addr, recvbuf, len);
                 break;
             default:
                 dbgprintf("IOP cmd: Uknown cmd received\n");
