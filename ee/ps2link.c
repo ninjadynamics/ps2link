@@ -188,7 +188,8 @@ static void loadModules(void)
 static void printWelcomeInfo()
 {
     scr_printf("\n\n\n\n");
-    scr_printf("Welcome to ps2link %s - P%d (gen %x)\n", APP_VERSION, PKO_HS_MARKER, boot_generation);
+    // APP_VERSION is empty when the checkout has no tags.
+    scr_printf("Welcome to ps2link%s%s - P%d (gen %x)\n", APP_VERSION[0] ? " " : "", APP_VERSION, PKO_HS_MARKER, boot_generation);
     scr_printf("ps2link loaded at 0x%08X-0x%08X, size: 0x%08X\n", (unsigned int)&__start, (unsigned int)&_end, (unsigned int)&_end - (unsigned int)&__start);
     scr_printf("Initializing...\n");
 }
