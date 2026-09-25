@@ -40,6 +40,7 @@ static volatile unsigned int exec_result_id = 0;
 static volatile int exec_result_status = 0;
 
 #define PKO_DMA_DEST ((void *)0x200ff800)
+#define PKO_SIF_DMA_TRIES 1000 /* 1 ms apart */
 //unsigned int *dma_ptr =(unsigned int*)(0x20100000-2048);
 
 //////////////////////////////////////////////////////////////////////////
@@ -152,7 +153,14 @@ pkoSendSifCmd(unsigned int cmd, void *src, unsigned int len)
        extra bytes are just trailing zeros. */
     dmaLen = (len + 15) & ~15;
 
+    /* sceSifSetDma refuses while its transfer queue is full, which a running
+       program's own SIF traffic can cause. A refused command would be lost
+       silently (a reset has already removed tty), so wait for queue space. */
     dmaId = pkoSetSifDma(PKO_DMA_DEST, rpc_data, dmaLen, 4);
+    for (int tries = 0; dmaId == 0 && tries < PKO_SIF_DMA_TRIES; tries++) {
+        DelayThread(1000);
+        dmaId = pkoSetSifDma(PKO_DMA_DEST, rpc_data, dmaLen, 4);
+    }
 
     if (dmaId == 0) {
         printf("IOP: sifSendCmd %x failed\n", cmd);

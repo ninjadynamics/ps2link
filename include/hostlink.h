@@ -66,7 +66,7 @@
 #define PKO_RESET2_RLY   0xbabe0215
 
 #define PKO_HS_PROTOCOL        1
-#define PKO_HS_MARKER          1
+#define PKO_HS_MARKER          2
 #define PKO_HS_FEATURE_EXECEE2 0x00000001
 #define PKO_HS_FEATURE_RESET2  0x00000002
 #define PKO_HS_FEATURE_TLM_PUSH 0x00000004
