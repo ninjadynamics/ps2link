@@ -173,6 +173,10 @@ pkoExecArgs(int argc, char *argv, unsigned int reply_id)
         return -1;
     }
 
+    // Retire the old program's network input record before the load can
+    // overwrite it; the IOP returns after its last transfer has completed.
+    pkoNotifyIop(PKO_NPM_INPUT_REGISTER, 0, 0);
+
     dbgprintf("EE: Executing file %s...\n", argv);
     memcpy(path, argv, PKO_MAX_PATH);
 

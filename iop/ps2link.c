@@ -18,6 +18,7 @@
 #include "cmdHandler.h"
 #include "nprintf.h"
 #include "tlmPush.h"
+#include "netInput.h"
 
 #define MODNAME "ps2link"
 IRX_ID(MODNAME, 1, 8);
@@ -57,6 +58,7 @@ int _start(int argc, char **argv)
     naplinkRpcInit();
     printf("Naplink thread started\n");
     tlmPushInit();
+    netInputInit();
 
     installExceptionHandlers();
 

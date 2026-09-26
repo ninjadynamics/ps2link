@@ -66,10 +66,43 @@
 #define PKO_RESET2_RLY   0xbabe0215
 
 #define PKO_HS_PROTOCOL        1
-#define PKO_HS_MARKER          3
+#define PKO_HS_MARKER          4
 #define PKO_HS_FEATURE_EXECEE2 0x00000001
 #define PKO_HS_FEATURE_RESET2  0x00000002
 #define PKO_HS_FEATURE_TLM_PUSH 0x00000004
+#define PKO_HS_FEATURE_NET_INPUT 0x00000008
+
+/* Network input (P4): the host sends controller datagrams to this port.
+ * ps2link validates only the header and copies the whole datagram, so a new
+ * payload version (analog triggers, a new controller, an agent bridge) needs
+ * the host and the program, never a ps2link rebuild. Byte-addressed,
+ * little-endian; ps2client's ps2link-input.h mirrors this layout:
+ *   0 magic "PKIN"   4 payload version   5 flags (bit 0: end of session)
+ *   6 size (u16, whole datagram, header .. PKO_INPUT_WIRE_MAX)
+ *   8 session (u32, nonzero)   12 sequence (u32, strictly increasing)
+ *  16 payload, opaque to ps2link. Version 1 (host modules and the program):
+ *     16 buttons (u16, libpad PAD_* bits, active high)
+ *     18 lx, 19 ly, 20 rx, 21 ry (u8, 0x80 = centre)
+ *     22 l2, 23 r2 (u8 analog trigger, 0 = released)
+ *     24 valid_ms (u16)
+ * Datagrams are accepted only from the fileio PC and are DMAed as a
+ * PkoInputRecord to the EE buffer registered with PKO_NPM_INPUT_REGISTER.
+ * PKO_INPUT_WIRE_MAX leaves room for later payloads (pressure buttons,
+ * motion sensors, more than one pad) without changing the record. */
+#define PKO_INPUT_PORT          0x4715
+#define PKO_INPUT_MAGIC         "PKIN"
+#define PKO_INPUT_HEADER_SIZE   16
+#define PKO_INPUT_WIRE_MAX      120
+#define PKO_INPUT_FLAG_END      0x01
+
+/* EE-side record, two 64-byte cache lines: the datagram verbatim (zero
+ * padded), bracketed by its sequence. seq_head == seq_tail marks a complete
+ * record; a program reads it through an uncached pointer. */
+typedef struct {
+    unsigned int seq_head;
+    unsigned char datagram[PKO_INPUT_WIRE_MAX];
+    unsigned int seq_tail;
+} PkoInputRecord;
 
 /* Binary telemetry: library "pkotlm" v1.1 export 4, pkoTlmPush(data, size),
  * sends one frame per UDP datagram to the fileio PC on this port (0x4713 is
@@ -85,6 +118,12 @@
 #define PKO_NPM_EE_READY    0x02
 #define PKO_NPM_EXEC_RESULT 0x03
 #define PKO_NPM_RESET_ACK   0x04
+/* word 0: EE address of a 64-byte-aligned PkoInputRecord (0 unregisters);
+ * word 1: sizeof(PkoInputRecord), which must match or the call is ignored.
+ * The EE loader unregisters before loading a new ELF; the call returns after
+ * the last transfer into the old program has completed. An IOP reset ends
+ * the registration with the module. */
+#define PKO_NPM_INPUT_REGISTER 0x05
 
 #define PKO_EXEC_STARTED      0
 #define PKO_EXEC_BUSY         1

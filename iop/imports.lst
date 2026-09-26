@@ -5,6 +5,7 @@ stdio_IMPORTS_end
 sysclib_IMPORTS_start
 I_memset
 I_memcpy
+I_memcmp
 I_strlen
 I_strncpy
 I_strncmp
@@ -55,6 +56,7 @@ sifcmd_IMPORTS_end
 
 sifman_IMPORTS_start
 I_sceSifSetDma
+I_sceSifDmaStat
 sifman_IMPORTS_end
 
 intrman_IMPORTS_start

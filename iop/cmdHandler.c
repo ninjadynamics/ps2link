@@ -310,7 +310,8 @@ pkoVersion(int sock, struct sockaddr_in *remote_addr)
     reply.len = htons(sizeof(reply));
     reply.protocol = htonl(PKO_HS_PROTOCOL);
     reply.marker = htonl(PKO_HS_MARKER);
-    reply.features = htonl(PKO_HS_FEATURE_EXECEE2 | PKO_HS_FEATURE_RESET2 | PKO_HS_FEATURE_TLM_PUSH);
+    reply.features = htonl(PKO_HS_FEATURE_EXECEE2 | PKO_HS_FEATURE_RESET2 | PKO_HS_FEATURE_TLM_PUSH |
+                          PKO_HS_FEATURE_NET_INPUT);
     reply.generation = htonl(boot_generation);
     reply.ee_ready = htonl(ee_ready);
     sendto(sock, &reply, sizeof(reply), 0, (struct sockaddr *)remote_addr, sizeof(*remote_addr));

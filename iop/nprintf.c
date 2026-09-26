@@ -16,6 +16,7 @@
 
 #include "hostlink.h"
 #include "cmdHandler.h"
+#include "netInput.h"
 
 ////////////////////////////////////////////////////////////////////////
 #define NPM_PUTS     0x01
@@ -38,6 +39,9 @@ naplinkRpcHandler(int cmd, void *buffer, int size)
             break;
         case PKO_NPM_RESET_ACK:
             cmdHandlerResetAck();
+            break;
+        case PKO_NPM_INPUT_REGISTER:
+            netInputRegister(((unsigned int *)buffer)[0], ((unsigned int *)buffer)[1]);
             break;
         default:
             printf("unknown npm rpc call\n");
