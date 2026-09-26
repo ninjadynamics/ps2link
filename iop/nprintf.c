@@ -36,6 +36,9 @@ naplinkRpcHandler(int cmd, void *buffer, int size)
         case PKO_NPM_EXEC_RESULT:
             cmdHandlerExecResult(((unsigned int *)buffer)[0], ((int *)buffer)[1]);
             break;
+        case PKO_NPM_RESET_ACK:
+            cmdHandlerResetAck();
+            break;
         default:
             printf("unknown npm rpc call\n");
     }

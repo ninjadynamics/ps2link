@@ -755,6 +755,12 @@ static int cmdThread(void *arg)
 
         switch (cmd) {
             case PKO_RESET_CMD:
+                /* Tell the IOP to stop re-forwarding before anything is torn
+                   down. No wait: a late reply must not stall the reset. */
+                npmData[0] = 0;
+                npmData[1] = 0;
+                SifCallRpc(&npmClient, PKO_NPM_RESET_ACK, SIF_RPC_M_NOWAIT,
+                           npmData, sizeof(npmData), NULL, 0, NULL, NULL);
                 pkoReset();
                 ret = 0;
                 done = 1;
@@ -882,7 +888,11 @@ void pkoReset(void)
     SifInitRpc(0);
     SifExitRpc();
 
-    SifIopReset(NULL, 0);
+    /* SifIopReset returns 0 when SIF refuses the transfer (a full queue left
+       by the terminated program). Waiting on SifIopSync after a refusal would
+       spin forever on an IOP that was never told to reboot. */
+    while (!SifIopReset(NULL, 0))
+        nopdelay();
     while (SifIopSync())
         ;
 

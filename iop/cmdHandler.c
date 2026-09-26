@@ -38,9 +38,15 @@ static volatile int ee_ready = 0;
 static unsigned int exec_forward_id = 0;
 static volatile unsigned int exec_result_id = 0;
 static volatile int exec_result_status = 0;
+// Set by the naplink RPC thread when the EE command thread starts a reset.
+static volatile int reset_acked = 0;
 
 #define PKO_DMA_DEST ((void *)0x200ff800)
 #define PKO_SIF_DMA_TRIES 1000 /* 1 ms apart */
+/* RESET is re-forwarded until the EE acknowledges it: each wait is 100 ms and
+   the whole exchange ends well inside ps2client's 5 s resend interval. */
+#define PKO_RESET_ACK_WAIT_MS 100
+#define PKO_RESET_FORWARDS    30
 //unsigned int *dma_ptr =(unsigned int*)(0x20100000-2048);
 
 //////////////////////////////////////////////////////////////////////////
@@ -216,9 +222,22 @@ pkoReset(char *buf, int len)
     printf("unmounting\n");
     fsysUnmount();
     printf("unmounted\n");
-    DelDrv("tty");
 
-    pkoSendSifCmd(PKO_RPC_RESET, buf, len);
+    /* A forwarded RESET could be accepted by SIF and still never start the
+       EE's reset. Repeat it until the EE command thread acknowledges; the
+       EE's own IOP reset ends this loop if the acknowledgement is late. The
+       line below tells the host log which side lost a failed reset. */
+    reset_acked = 0;
+    int forwards = 0;
+    while (!reset_acked && forwards < PKO_RESET_FORWARDS) {
+        pkoSendSifCmd(PKO_RPC_RESET, buf, len);
+        forwards++;
+        for (int ms = 0; !reset_acked && ms < PKO_RESET_ACK_WAIT_MS; ms++)
+            DelayThread(1000);
+    }
+    printf("IOP: reset forwarded %d time(s), EE %s\n", forwards,
+           reset_acked ? "acknowledged" : "never acknowledged");
+    DelDrv("tty");
 };
 
 static void
@@ -273,6 +292,13 @@ cmdHandlerExecResult(unsigned int id, int status)
 {
     exec_result_status = status;
     exec_result_id = id;
+}
+
+// Called from the naplink RPC thread as the EE starts a forwarded reset.
+void
+cmdHandlerResetAck(void)
+{
+    reset_acked = 1;
 }
 
 static void

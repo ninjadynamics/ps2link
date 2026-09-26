@@ -17,5 +17,6 @@ int cmdHandlerInit(void);
 void cmdHandlerSetGeneration(unsigned int generation);
 void cmdHandlerEeReady(void);
 void cmdHandlerExecResult(unsigned int id, int status);
+void cmdHandlerResetAck(void);
 
 #endif /* CMD_HANDLER_H */

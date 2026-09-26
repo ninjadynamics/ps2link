@@ -66,7 +66,7 @@
 #define PKO_RESET2_RLY   0xbabe0215
 
 #define PKO_HS_PROTOCOL        1
-#define PKO_HS_MARKER          2
+#define PKO_HS_MARKER          3
 #define PKO_HS_FEATURE_EXECEE2 0x00000001
 #define PKO_HS_FEATURE_RESET2  0x00000002
 #define PKO_HS_FEATURE_TLM_PUSH 0x00000004
@@ -78,10 +78,13 @@
 #define PKO_TLM_FRAME_MAX 1440
 
 /* EE -> IOP notifications on the existing naplink RPC server. EXEC_RESULT
- * carries two native 32-bit words: request ID, then PKO_EXEC_* status. */
+ * carries two native 32-bit words: request ID, then PKO_EXEC_* status.
+ * RESET_ACK is sent (without waiting) as the EE command thread starts a
+ * reset; the IOP re-forwards RESET until it arrives. */
 #define PKO_NPM_RPC_ID      0x014d704e
 #define PKO_NPM_EE_READY    0x02
 #define PKO_NPM_EXEC_RESULT 0x03
+#define PKO_NPM_RESET_ACK   0x04
 
 #define PKO_EXEC_STARTED      0
 #define PKO_EXEC_BUSY         1
