@@ -66,13 +66,18 @@
 #define PKO_RESET2_RLY   0xbabe0215
 
 #define PKO_HS_PROTOCOL        1
-#define PKO_HS_MARKER          4
+#define PKO_HS_MARKER          6
 #define PKO_HS_FEATURE_EXECEE2 0x00000001
 #define PKO_HS_FEATURE_RESET2  0x00000002
 #define PKO_HS_FEATURE_TLM_PUSH 0x00000004
 #define PKO_HS_FEATURE_NET_INPUT 0x00000008
 
-/* Network input (P4): the host sends controller datagrams to this port.
+/* Network input (P4, P5): the host sends controller datagrams to the
+ * command port. P5 moved them from their own port (0x4715): an extra UDP
+ * socket exhausted ps2ip's 4 UDP PCBs (MEMP_NUM_UDP_PCB) and left
+ * pkoTlmPush without its lazily created socket, so every telemetry frame
+ * failed. The command listener dispatches them by the leading "PKIN",
+ * which reads as PKO_INPUT_CMD.
  * ps2link validates only the header and copies the whole datagram, so a new
  * payload version (analog triggers, a new controller, an agent bridge) needs
  * the host and the program, never a ps2link rebuild. Byte-addressed,
@@ -89,7 +94,8 @@
  * PkoInputRecord to the EE buffer registered with PKO_NPM_INPUT_REGISTER.
  * PKO_INPUT_WIRE_MAX leaves room for later payloads (pressure buttons,
  * motion sensors, more than one pad) without changing the record. */
-#define PKO_INPUT_PORT          0x4715
+#define PKO_INPUT_PORT          PKO_CMD_PORT
+#define PKO_INPUT_CMD           0x504b494e  /* "PKIN", as ntohl reads it */
 #define PKO_INPUT_MAGIC         "PKIN"
 #define PKO_INPUT_HEADER_SIZE   16
 #define PKO_INPUT_WIRE_MAX      120

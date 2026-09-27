@@ -1,11 +1,11 @@
 /*********************************************************************
- * HyperSolar fork (P4): network controller input.
+ * HyperSolar fork (P4, P5): network controller input.
  * This file is subject to the terms and conditions of the PS2Link License.
  * See the file LICENSE in the main directory of this distribution for more
  * details.
  *
- * One UDP listener accepts controller datagrams (hostlink.h) from the fileio
- * PC and DMAs each accepted datagram, verbatim, into the EE record the
+ * The command listener hands over controller datagrams (hostlink.h) from the
+ * fileio PC; each accepted one is DMAed, verbatim, into the EE record the
  * running program registered. Only the header is validated here: the
  * payload belongs to the host modules and the program, so new controllers or
  * payload versions never need a ps2link rebuild. Nothing is queued: the newest
@@ -106,59 +106,27 @@ static void input_accept(const unsigned char *datagram, int len)
     SignalSema(input_sema);
 }
 
-static void inputThread(void *arg)
+/* The command listener's thread (cmdHandler.c) owns the socket. */
+void netInputAccept(const struct sockaddr_in *from, const unsigned char *datagram, int len)
 {
-    struct sockaddr_in addr;
-    unsigned char buf[PKO_INPUT_WIRE_MAX + 4];
-    int sock;
-
-    (void)arg;
-    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock < 0)
-        ExitDeleteThread();
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(PKO_INPUT_PORT);
-    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0)
-        ExitDeleteThread();
-
-    while (1) {
-        struct sockaddr_in from;
-        int fromlen = sizeof(from);
-        int len = recvfrom(sock, buf, sizeof(buf), 0,
-                           (struct sockaddr *)&from, &fromlen);
-        /* Only the fileio PC may drive the pad; the datagram is complete. */
-        if (len < PKO_INPUT_HEADER_SIZE || len > PKO_INPUT_WIRE_MAX ||
-            remote_pc_addr == 0xffffffff ||
-            from.sin_addr.s_addr != remote_pc_addr ||
-            memcmp(buf, PKO_INPUT_MAGIC, 4) != 0 ||
-            rd16(buf + 6) != (unsigned int)len)
-            continue;
-        input_accept(buf, len);
-    }
+    /* Only the fileio PC may drive the pad; the datagram is complete. */
+    if (len < PKO_INPUT_HEADER_SIZE || len > PKO_INPUT_WIRE_MAX ||
+        remote_pc_addr == 0xffffffff ||
+        from->sin_addr.s_addr != remote_pc_addr ||
+        memcmp(datagram, PKO_INPUT_MAGIC, 4) != 0 ||
+        rd16(datagram + 6) != (unsigned int)len)
+        return;
+    input_accept(datagram, len);
 }
 
 int netInputInit(void)
 {
     iop_sema_t sema;
-    iop_thread_t thread;
-    int pid;
 
     sema.attr = 0;
     sema.option = 0;
     sema.initial = 1;
     sema.max = 1;
     input_sema = CreateSema(&sema);
-    if (input_sema < 0)
-        return -1;
-    thread.attr = 0x02000000;
-    thread.option = 0;
-    thread.thread = inputThread;
-    thread.stacksize = 0x800;
-    thread.priority = 60;
-    pid = CreateThread(&thread);
-    if (pid < 0)
-        return -1;
-    return StartThread(pid, 0) < 0 ? -1 : 0;
+    return input_sema < 0 ? -1 : 0;
 }

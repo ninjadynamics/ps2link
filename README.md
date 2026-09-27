@@ -36,7 +36,11 @@ The IRX's and the IPCONFIG.DAT should be in the directory which PS2LINK is loade
     SMAP.IRX                        ps2sdk
     IOPTRAP.IRX                     ps2sdk
     POWEROFF.IRX                    ps2sdk
-    UDPTTY.IRX                      ps2sdk
+
+The console (`tty`) is part of PS2LINK.IRX (`iop/tty.c`, P6): output goes to
+the connected PC on UDP 18194, where ps2client listens, instead of PS2SDK's
+UDPTTY broadcast to the whole LAN. Output before a PC connects is held (4 KB)
+and sent on connect.
 
 ## Compilation
 

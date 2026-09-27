@@ -31,7 +31,4 @@ extern unsigned int size_netman_irx;
 extern unsigned char smap_irx[];
 extern unsigned int size_smap_irx;
 
-extern unsigned char udptty_irx[];
-extern unsigned int size_udptty_irx;
-
 #endif /* IRX_VARIABLES_H */

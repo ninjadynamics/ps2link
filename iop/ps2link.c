@@ -16,6 +16,7 @@
 #include "excepHandler.h"
 #include "net_fsys.h"
 #include "cmdHandler.h"
+#include "tty.h"
 #include "nprintf.h"
 #include "tlmPush.h"
 #include "netInput.h"
@@ -42,6 +43,9 @@ int _start(int argc, char **argv)
             cmdHandlerSetGeneration(generation);
         }
     }
+
+    /* Console first: everything below prints through it. */
+    ttyInit();
 
     FlushDcache();
     CpuEnableIntr();

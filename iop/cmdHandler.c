@@ -23,6 +23,7 @@
 #include "hostlink.h"
 #include "net_fsys.h"
 #include "globals.h"
+#include "netInput.h"
 
 #define BUF_SIZE 1024
 static char recvbuf[BUF_SIZE] __attribute__((aligned(16)));
@@ -455,6 +456,9 @@ cmdListener(int sock)
                 break;
             case PKO_RESET2_CMD:
                 pkoReset2(sock, &remote_addr, recvbuf, len);
+                break;
+            case PKO_INPUT_CMD:
+                netInputAccept(&remote_addr, (const unsigned char *)recvbuf, len);
                 break;
             default:
                 dbgprintf("IOP cmd: Uknown cmd received\n");

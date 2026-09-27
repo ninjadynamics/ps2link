@@ -7,7 +7,7 @@ EE_LIBS += -lpatches -ldebug
 
 # IRX libs
 IRX_FILES += ioptrap.irx ps2dev9.irx poweroff.irx
-IRX_FILES += ps2ip.irx netman.irx smap.irx udptty.irx
+IRX_FILES += ps2ip.irx netman.irx smap.irx
 IRX_FILES += ps2link.irx
 EE_OBJS += $(IRX_FILES:.irx=_irx.o) ps2ip_nm_irx.o
 

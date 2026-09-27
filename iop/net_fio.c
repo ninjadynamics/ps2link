@@ -18,6 +18,7 @@
 
 #include "ps2ip.h"
 #include "net_fio.h"
+#include "tty.h"
 #include "hostlink.h"
 #include "globals.h"
 
@@ -746,6 +747,7 @@ int pko_file_serv(void *argv)
                   client_addr.sin_addr.s_addr);
 
         remote_pc_addr = client_addr.sin_addr.s_addr;
+        ttyHostConnected();
 
         if (pko_fileio_sock > 0) {
             dbgprintf("Client reconnected\n");
